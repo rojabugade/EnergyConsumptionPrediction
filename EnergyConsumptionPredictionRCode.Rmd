@@ -1,0 +1,1406 @@
+```{r}
+# Data Merging
+
+install.packages("arrow")
+library(arrow)
+
+install.packages("tidyverse")
+library(tidyverse)
+
+Static_House_Data <- read_parquet("https://intro-datascience.s3.us-east-2.amazonaws.com/SC-data/static_house_info.parquet")
+View(Static_House_Data)
+
+building_id_102063 <- read_parquet("https://intro-datascience.s3.us-east-2.amazonaws.com/SC-data/2023-houseData/102063.parquet")
+View(building_id_102063)
+
+meta_data <- read_csv("https://intro-datascience.s3.us-east-2.amazonaws.com/SC-data/data_dictionary.csv")
+View(meta_data)
+
+weather_county_G4500010 <- read_csv("https://intro-datascience.s3.us-east-2.amazonaws.com/SC-data/weather/2023-weather-data/G4500010.csv")
+View(weather_county_G4500010)
+
+string1 <- "https://intro-datascience.s3.us-east-2.amazonaws.com/SC-data/2023-houseData/"
+string2 <- Static_House_Data$bldg_id
+string3 <- ".parquet"
+Static_House_Data$BuildingIdLink <- paste0(string1, string2, string3)
+read_parquet(Static_House_Data$BuildingIdLink[1])
+
+string1 <- "https://intro-datascience.s3.us-east-2.amazonaws.com/SC-data/weather/2023-weather-data/"
+string2 <- Static_House_Data$in.county
+string3 <- ".csv"
+Static_House_Data$WeatherLink <- paste0(string1, string2, string3)
+
+energy_data <- read_parquet(Static_House_Data$BuildingIdLink[1])
+
+energy_data <- energy_data[order(energy_data$time),]
+
+energy_data$Buidling_ID <- Static_House_Data$bldg_id[1]
+
+energy_data <- energy_data[format(energy_data$time, "%m") == "07", ]
+
+energy_data <- na.omit(energy_data)
+
+energy_data_sample <-sample(nrow(energy_data), 50, replace = FALSE)
+
+energy_data <- energy_data[energy_data_sample, ]
+
+#energy_data <- distinct(energy_data)
+
+View(energy_data)
+
+weather_data <-read_csv(Static_House_Data$WeatherLink[1])
+
+#weather_data <- distinct(weather_data)
+
+merged_data <- merge(x=energy_data, y=weather_data, by.x = "time", by.y = "date_time")
+
+for (i in 2:nrow(Static_House_Data)){
+  
+  energy_data <- read_parquet(Static_House_Data$BuildingIdLink[i])
+  
+  energy_data$Buidling_ID <- Static_House_Data$bldg_id[i]
+  
+  energy_data <- energy_data[format(energy_data$time, "%m") == "07", ]
+  
+  energy_data <- na.omit(energy_data)
+  
+  energy_data_sample <-sample(nrow(energy_data), 50, replace = FALSE)
+  
+  energy_data <- energy_data[energy_data_sample, ]
+  
+  weather_data <-read_csv(Static_House_Data$WeatherLink[i])
+  
+  merged_data_raw <- merge(x=energy_data, y=weather_data, by.x = "time", by.y = "date_time")
+  
+  merged_data <- rbind(merged_data, merged_data_raw)
+  
+} 
+
+# View(merged_data)
+
+# df <- merged_data
+
+# str(distinct(merged_data))
+
+# nrow(Static_House_Data)
+
+# write.csv(df, "demo.csv", row.names = FALSE)
+
+# table(df$Buidling_ID)
+
+demo <- read_csv("Downloads/demo.csv") # FIRST RAW SMALL
+
+View(demo)
+
+demo1 <- read_csv("Desktop/demo1.csv") # MAIN
+
+View(demo1)
+
+str(distinct(demo1))
+
+str(demo1)
+
+# LABEL ENCONDING EXPERIMENT
+
+# demo3 <- demo1
+
+# demo3$in.county <- as.integer(factor(demo1$in.county))
+
+# demo3$in.county
+
+# View(demo3)
+
+# Merge two data files
+# energy and weather
+
+
+library(tidyverse)
+library(arrow)
+
+temp_house <- housedata
+
+
+addressLog <- data.frame(bldg_id = numeric(0),county_id = character(0),energyAddress = character(0),weatherAddress = character(0))
+
+# Output list for peak month
+#outputList <- data.frame(bldg_id = numeric(0),peak_consumption = numeric(0), peak_month = numeric(0), mean_temperature = numeric(0), mean_humidity = numeric(0),mean_wind_speed = numeric(0))
+
+# Output list for only july
+outputList <- data.frame(bldg_id = numeric(0),energy_consumption = numeric(0), month = numeric(0), mean_temperature = numeric(0), mean_humidity = numeric(0),mean_wind_speed = numeric(0))
+
+# in for loop bracket input specific row to see monthly summary of house that row represents. eg. for (i in 50:50) means showing the info of housing at row 50 in housedata
+
+# output:
+# tempdf: merge energy and weather file together
+# tempdf_clean: monthly summary of specific building
+# addressLog : building id, county id and two data addresses
+# outputList: peak energy consumption per month, along with average weather data of that month, labeled with building id can be further merged with housedata for analysis
+
+for (i in 1:nrow(temp_house)){
+  # Print the number of iteration being processed
+  # For complete iteration input **i in 1:nrow(temp_house)**
+  identifier <- paste0("This is ",as.character(i)," iteration")
+  print(identifier)
+  
+  # extract ids from house data
+  building_id <- temp_house$bldg_id[i]
+  county_id <- temp_house$in.county[i]
+  
+  # first step create address of energy file and weather file
+  energyAddress <- paste0('https://intro-datascience.s3.us-east-2.amazonaws.com/SC-data/2023-houseData/',building_id,'.parquet')
+  weatherAddress <- paste0('https://intro-datascience.s3.us-east-2.amazonaws.com/SC-data/weather/2023-weather-data/',county_id,'.csv')
+ 
+  addressLog <- add_row(addressLog,bldg_id = building_id, county_id = county_id,energyAddress=energyAddress,weatherAddress=weatherAddress)
+
+  # read energy data an d weather data
+  tempdf_energy <- read_parquet(energyAddress)
+  tempdf_weather <- read_csv(weatherAddress,show_col_types = FALSE)
+  
+  # merge two data file into one, with time as reference
+  tempdf <- merge(tempdf_energy,tempdf_weather,all.x=TRUE,by.x="time",by.y="date_time")
+  
+  # set time sequence
+  # extract time info
+  time_str <- tempdf[1] %>%
+    mutate(time_as_string = format(time, "%Y-%m-%d %H:%M:%S"),.keep="unused")
+  
+  # convert time format to string
+  tempdf <- data.frame(tempdf,time_str)
+
+  # extract month info, create time sequence and rearrange the dateset
+  tempdf$month <- as.numeric(substr(tempdf$time_as_string,6,7))
+  
+  # clean up the merged file
+  tempdf <- tempdf[complete.cases(tempdf$month),]
+  
+  
+  # arrange order of data
+  tempdf$time_se <- as.numeric(paste0(substr(tempdf$time_as_string,6,7),substr(tempdf$time_as_string,9,10)))
+  tempdf <- arrange(tempdf,tempdf$time_se)
+  
+  # clean again NA value before next step
+  tempdf_clean <- tempdf[complete.cases(tempdf$Dry.Bulb.Temperature...C.),]
+  
+  # calculate total energy consumption per month
+  for (i in 1:nrow(tempdf_clean)){
+    tempdf_clean$sum_energy[i] <- sum(tempdf_clean[i,2:43])
+  }
+  
+  # summarise the output
+  tempdf_clean <- tempdf_clean %>%
+    group_by(month) %>%
+    summarise(monthly_usage = sum(sum_energy),monthly_temp = mean(Dry.Bulb.Temperature...C.),monthly_humidity = mean(Relative.Humidity....),monthly_windspeed = mean(Wind.Speed..m.s.))
+  
+  # output data file
+  # Select Peak energy usage
+  #outputList <- add_row(outputList,bldg_id = building_id,peak_consumption = max(tempdf_clean$monthly_usage), peak_month = which.max(tempdf_clean$monthly_usage), mean_temperature = tempdf_clean$monthly_temp[peak_month], mean_humidity = tempdf_clean$monthly_humidity[peak_month],mean_wind_speed = tempdf_clean$monthly_windspeed[peak_month])
+  
+  # Select only july data, tempdf_clean[7,]
+  outputList <- add_row(outputList,bldg_id = building_id,energy_consumption = tempdf_clean$monthly_usage[7], month = 7, mean_temperature = tempdf_clean$monthly_temp[month], mean_humidity = tempdf_clean$monthly_humidity[month],mean_wind_speed = tempdf_clean$monthly_windspeed[month])
+  
+  # remove temporary files
+  rm(tempdf_energy)
+  rm(tempdf_weather)
+  rm(time_str)
+  
+}
+```
+
+
+```{r}
+# Store output list as an excel file
+#install.packages("writexl")
+library(writexl)
+
+df <- outputList
+write_xlsx(df, "~/Downloads/df.csv")
+
+# the path can be anywhere, seperate path with **\\**
+
+```
+
+
+```{r}
+# house data cleaning
+
+temp_house <- housedata
+
+cols <- c("bldg_id",
+"in.sqft",
+"in.bathroom_spot_vent_hour",
+"in.bedrooms",
+"in.city",
+"in.cooking_range",
+"in.clothes_dryer",
+"in.clothes_washer",
+"in.cooling_setpoint",
+"in.county",
+"in.dishwasher",
+"in.federal_poverty_level",
+"in.geometry_foundation_type",
+"in.geometry_garage", 
+"in.geometry_stories",
+"in.geometry_wall_exterior_finish", 
+"in.geometry_wall_type",
+"in.has_pv", 
+"in.heating_fuel", 
+"in.heating_setpoint", 
+"in.holiday_lighting", 
+"in.hot_water_distribution", 
+"in.hot_water_fixtures", 
+"in.hvac_cooling_efficiency", 
+"in.hvac_cooling_type",
+"in.hvac_has_ducts", 
+"in.hvac_has_shared_system",
+"in.hvac_heating_efficiency",
+"in.hvac_heating_type",
+"in.hvac_heating_type_and_fuel",
+"in.income",
+"in.income_recs_2015",
+"in.income_recs_2020",
+"in.infiltration",
+"in.insulation_ceiling",
+"in.insulation_floor",
+"in.insulation_wall",
+"in.orientation",
+"in.puma",
+"in.occupants",
+"in.plug_load_diversity",
+"in.range_spot_vent_hour",
+"in.refrigerator",
+"in.roof_material",
+"in.usage_level",
+"in.vacancy_status",
+"in.water_heater_efficiency",
+"in.water_heater_fuel",
+"in.weather_file_latitude",
+"in.weather_file_longitude",
+"upgrade.clothes_dryer")
+
+temp_house <- temp_house[,cols]   # housedata cleaning, left 51 columns in total
+
+```
+
+
+```{r}
+# VISUALIZATION
+library(readr)
+library(ggplot2)
+data<-read_csv("/Users/ashishkushwaha/Downloads/Data.csv")
+energyusage<-read_csv("/Users/ashishkushwaha/Downloads/energyusagedata.csv") 
+
+#How big is the problem
+#Run the model and predict the energy consumption after 5 degree temperature increase
+# Get the numeric columns of main_data
+numeric_cols <- which(sapply(main_data, is.numeric))
+cols_to_convert <- 1:79
+data[cols_to_convert] <- lapply(data[cols_to_convert], as.factor)
+levels(data$in.weather_file_city)
+lmOutFinal <- lm(energy_sum ~ in.sqft + in.cooling_setpoint + in.cooling_setpoint_offset_period
+                 + in.window_areas + `Dry Bulb Temperature [°C]`  + in.ducts
+                 + in.occupants  + in.heating_setpoint + in.windows 
+                 + in.orientation + in.geometry_garage 
+                 + in.heating_setpoint_offset_period + in.weather_file_city, data) 
+data_new <- data
+data_new$`Dry Bulb Temperature [°C]` <- data_new$`Dry Bulb Temperature [°C]` + 5
+
+predictions <- predict(lmOutFinal, newdata = data_new)
+sum(predictions)
+
+# Sum only the numeric columns and assign it to energy_consumption
+main_data$energy_consumption <- rowSums(main_data[, numeric_cols], na.rm = TRUE)
+total_energy_consumption <- sum(main_data$energy_consumption, na.rm = TRUE)
+
+#Sum of energy consumption before 5 degree temperature increase 
+before_sum <- sum(data$energy_sum)
+
+#Sum of energy consumption after 5 degree temperature increase 
+after_sum <- sum(predictions)
+
+# Calculate the percentage increase
+percentage_increase <- ((after_sum - before_sum) / before_sum) * 100
+
+# Create a data frame with the results
+sum_data <- data.frame(Type = c("Before", "After"), 
+                       Energy_Sum = c(before_sum, after_sum),
+                       Percentage_Increase = c(0, percentage_increase))
+
+# Barplot with percentage increase
+# Plot the barplot
+bp <- barplot(sum_data$Energy_Sum, 
+              names.arg = sum_data$Type, 
+              col = c("lightgreen", "lightblue"), 
+              main = "Energy Consumption Increment After Temperature Rise",
+              xlab = "Temperature Rise",
+              ylab = "Energy Consumption",
+              ylim = c(0, max(sum_data$Energy_Sum) * 1.2),
+              font.lab = 2,  # Adjust ylim to accommodate percentage labels
+              space = 0.5,  # Adjust space between bars
+              border = NA)  # Remove bar borders
+
+# Add text labels for percentage increase
+text(x = bp, y = sum_data$Energy_Sum, labels = paste0(round(sum_data$Percentage_Increase, 2), "%"), pos = 3)
+
+# Add lines inside the bars to indicate increasing height
+for (i in 1:2) {
+  arrows(x0 = bp[i], y0 = sum_data$Energy_Sum[i], 
+         x1 = bp[i] + 1, y1 = sum_data$Energy_Sum[i + 1], 
+         length = 0.1, angle = 30, col = "red", lwd = 2)
+}
+
+#Find the cities that are consuming higher energy 
+#Cities with highest energy consumption
+agg_data <- aggregate(main_data$energy_consumption, by = list(main_data$in.weather_file_city), FUN = sum)
+colnames(agg_data) <- c("City", "Total_Energy_Consumption")
+
+sorted_data <- agg_data[order(agg_data$Total_Energy_Consumption, decreasing = TRUE), ]
+sorted_data$percentage<-(sorted_data$Total_Energy_Consumption/sum(sorted_data$Total_Energy_Consumption))*100
+top_5_cities <- data.frame(sorted_data)
+top_5_cities <-head(top_5_cities,4)
+top_5_cities
+
+# Aggregate energy consumption data
+agg_data <- aggregate(main_data$energy_consumption, by = list(main_data$in.weather_file_city), FUN = sum)
+colnames(agg_data) <- c("City", "Total_Energy_Consumption")
+sorted_data <- agg_data[order(agg_data$Total_Energy_Consumption, decreasing = TRUE), ]
+sorted_data$percentage <- (sorted_data$Total_Energy_Consumption / sum(sorted_data$Total_Energy_Consumption)) * 100
+top_4_cities <- head(sorted_data, 4)
+top_4_cities <- merge(top_4_cities, main_data[, c("in.weather_file_city", "in.weather_file_latitude", "in.weather_file_longitude")], 
+                      by.x = "City", by.y = "in.weather_file_city")
+colnames(top_4_cities) <- c("City", "Total_Energy_Consumption", "Percentage", "Latitude", "Longitude")
+top_4_cities <- unique(top_4_cities)
+
+
+sc_nc_map <- subset(map_data("state"), region %in% c("south carolina", "north carolina"))
+
+
+# Define shapes for each city
+shapes <- c(15, 16, 17, 18)
+
+# Plot the map with the selected cities and energy consumption data
+ggplot() +
+  geom_polygon(data = sc_nc_map, aes(x = long, y = lat, group = group), fill = "white", color = "black") +
+  geom_point(data = top_4_cities, aes(x = Longitude, y = Latitude, color = Percentage, shape = City), size = 5) +
+  scale_color_gradient(name = "Percentage", low = "green", high = "red") +
+  geom_text(data = top_4_cities, aes(x = Longitude, y = Latitude, label = paste0(round(Percentage), "%")), hjust = 1.3, vjust = 0) +  # Display percentage instead of city names
+  scale_shape_manual(values = shapes) +  # Assign shapes
+  theme_minimal() +
+  theme(
+    legend.position = "right",  # Position legend on the right side
+    axis.text = element_blank(),  # Remove axis text
+    axis.title = element_blank(),  # Remove axis titles
+    panel.grid.major = element_blank(),  # Remove major gridlines
+    panel.grid.minor = element_blank(),  # Remove minor gridlines
+    plot.caption = element_text(hjust = 0.5),
+    plot.title = element_text(face = "bold")  # Center the title at the bottom of the map
+  ) +
+  labs(caption = "Top Four Cities with Highest Energy Consumption")
+
+#House groups that are consuming maximum energy
+
+number_counts <- table(mydataf$in.sqft)
+counts_df<-as.data.frame(number_counts)
+agg_energy_sum <- aggregate(energy_sum ~ in.sqft, data = mydataf, FUN = sum)
+merged_data <- merge(counts_df, agg_energy_sum, by.x = "Var1", by.y = "in.sqft")
+total_freq <- sum(merged_data$Freq)
+merged_data$percentage <- round((merged_data$Freq / total_freq) * 100, 1)
+
+ggplot(merged_data, aes(x = Var1, y = Freq, fill = energy_sum)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = paste0(percentage, "%")), vjust = -0.5, size = 3) +  
+  scale_fill_gradient(low = "lightblue", high = "red", name = "Energy Consumption") + 
+  labs(title = "Total Number of Houses for each sqft area group",
+       x = "House Area (Sqft)", y = "Number of Houses") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "bold")) 
+
+#Heating and cooling setpoint analysis
+
+#Day-Night setup and setback period
+day_night <- main_data[grep("Day and Night Setup", main_data$in.cooling_setpoint_offset_period, ignore.case = TRUE), ]
+day_setup <- main_data[grep("Day Setup(?!.*and Night Setback)", main_data$in.cooling_setpoint_offset_period, ignore.case = TRUE, perl = TRUE), ]
+day_night_setback <- main_data[grep("Day Setup and Night Setback", main_data$in.cooling_setpoint_offset_period, ignore.case = TRUE), ]
+night_setback <- main_data[grep("^Night Setback [+-]\\d+h$", main_data$in.cooling_setpoint_offset_period), ]
+night_setup <- main_data[grep("^Night Setup [+-]\\d+h$", main_data$in.cooling_setpoint_offset_period), ]
+None <- main_data[grep("None", main_data$in.cooling_setpoint_offset_period, ignore.case = TRUE), ]
+
+# Aggregate sum of energy consumption
+day_night_sum <- sum(day_night$energy_consumption, na.rm = TRUE)
+day_setup_sum <- sum(day_setup$energy_consumption, na.rm = TRUE)
+day_night_setback_sum <- sum(day_night_setback$energy_consumption, na.rm = TRUE)
+night_setback_sum <- sum(night_setback$energy_consumption, na.rm = TRUE)
+night_setup_sum <- sum(night_setup$energy_consumption, na.rm = TRUE)
+none_sum <- sum(None$energy_consumption, na.rm = TRUE)
+
+# Calculate total energy consumption
+total_energy <- sum(day_night_sum, day_setup_sum, day_night_setback_sum, night_setback_sum, night_setup_sum, none_sum)
+
+# Calculate percentage of total energy consumption for each category
+day_night_percent <- (day_night_sum / total_energy) * 100
+day_setup_percent <- (day_setup_sum / total_energy) * 100
+day_night_setback_percent <- (day_night_setback_sum / total_energy) * 100
+night_setback_percent <- (night_setback_sum / total_energy) * 100
+night_setup_percent <- (night_setup_sum / total_energy) * 100
+none_percent <- (none_sum / total_energy) * 100
+
+# Combine the percentages
+combined_percent <- c(day_night_percent, day_setup_percent, day_night_setback_percent, night_setback_percent, night_setup_percent, none_percent)
+
+# Set the size of the plotting area
+par(mar = c(5, 6, 4, 4))  # Adjust the margins as needed to accommodate the text
+
+# Create the bar plot
+barplot(combined_sum, names.arg = bar_names, 
+        main = "Total Energy Consumption",
+        xlab = "Cooling Setup Type",
+        ylab = "Total Energy Consumption (KWH)",
+        col = ifelse(bar_names == "No Specific Setup", "red", "lightblue"),  # Set blue color for "No Specific Setup" and lightblue for others
+        cex.names = 0.7,  # Adjust the font size of the label names (0.7 for example)
+        font.lab = 2,     # Set the font style to bold (2 for bold)
+        ylim = c(0, max(combined_sum) * 1.2))  # Set the y-axis limits to provide space for text
+
+# Add percentage text in the middle of each bar
+text(x = barplot(combined_sum), y = combined_sum / 2, label = paste0(round(combined_percent, 2), "%"), pos = 3, cex = 0.7, col = "black")
+
+#Visulaizing DUCTS energy consumption 
+
+table(main_data$in.ducts)
+data.frame(main_data$in.ducts,main_data$energy_consumption)
+aggregated_data <- aggregate(main_data$energy_consumption, 
+                             by = list(in.ducts = main_data$in.ducts), 
+                             FUN = sum)
+
+aggregated_data$Percentage <- (aggregated_data$`Total Energy Consumption` / sum(aggregated_data$`Total Energy Consumption`)) * 100
+View(aggregated_data)
+
+ducts_frequency <- table(main_data$in.ducts)
+total_obs <- length(main_data$in.ducts)
+ducts_frequency_df <- as.data.frame(ducts_frequency)
+ducts_percentage <- (ducts_frequency / total_obs) * 100
+ducts_percentage_df <- as.data.frame(ducts_frequency)
+colnames(ducts_percentage_df) <- c("Ducts Situation", "Frequency")
+ducts_percentage_df$Percentage <- ducts_percentage
+View(ducts_percentage_df)
+
+colnames(aggregated_data) <- c("Ducts Situation", "Total Energy Consumption")
+
+# Convert in.ducts to factor with desired order
+main_data$in.ducts <- factor(main_data$in.ducts, levels = unique(main_data$in.ducts)[order(main_data$in.ducts)])
+
+merged_data <- merge(main_data, aggregated_data, by = "in.ducts", all.x = TRUE)
+
+ggplot(data = main_data, aes(x = in.ducts)) +
+  geom_bar(fill = "skyblue", color = "black") +
+  labs(title = "Distribution of in.ducts Variable",
+       y = "in.ducts Groups",
+       x = "Frequency") +
+  coord_flip()
+
+```
+
+
+```{r}
+# Merging house data, weather data and energy data together
+
+RawData <- merge(temp_house,outputList,all.x=TRUE,by="bldg_id") 
+
+# column 1-51 is house applications and geometries, 52 is total energy consumption in july, 54-56 is average weather info
+
+# df <- read_csv("~/Documents/SP/SMIT PARIKH/MS APPLIED DATA SCIENCE/SEMESTER 1/IST 687 - Introduction to Data Science/Project/main/demo1.csv")
+# View(df)
+
+df1 <- read_csv("~/Documents/SP/SMIT PARIKH/MS APPLIED DATA SCIENCE/SEMESTER 1/IST 687 - Introduction to Data Science/Project/main/demo1.csv")
+View(df1)
+
+library(readr)
+data_dictionary <- read_csv("~/Documents/SP/SMIT PARIKH/MS APPLIED DATA SCIENCE/SEMESTER 1/IST 687 - Introduction to Data Science/Project/data_dictionary.csv")
+View(data_dictionary)
+```
+
+
+```{r}
+# DATA CLEANING
+
+# sum(is.na(df$upgrade))
+# unique(df$upgrade)
+# 
+# sum(is.na(df$weight))
+# unique(df$weight)
+# # remove column - the only value 242.131
+# df <- df[, -which(names(df) == "weight")]
+# 
+# sum(is.na(df$applicability))
+# unique(df$applicability)
+# # remove column - the only value is true
+# df <- df[, -which(names(df) == "applicability")]
+# 
+# sum(is.na(df$in.sqft))
+# unique(df$in.sqft)
+# # convert the in.sqft column from numeric to categorical
+# df$in.sqft <- as.factor(df$in.sqft)
+# df$in.sqft
+# sum(is.na(df$in.sqft))
+# 
+# sum(is.na(df$in.ahs_region))
+# unique(df$in.ahs_region)
+# # remove column - the only value is "Non-CBSA South Atlantic"
+# df <- df[, -which(names(df) == "in.ahs_region")]
+# 
+# sum(is.na(df$in.ashrae_iecc_climate_zone_2004))
+# unique(df$in.ashrae_iecc_climate_zone_2004)
+# # remove column - the only value is "3A"
+# df <- df[, -which(names(df) == "in.ashrae_iecc_climate_zone_2004")]
+# 
+# sum(is.na(df$in.ashrae_iecc_climate_zone_2004_2_a_split))
+# unique(df$in.ashrae_iecc_climate_zone_2004_2_a_split)
+# # remove column - the only value is "3A"
+# df <- df[, -which(names(df) == "in.ashrae_iecc_climate_zone_2004_2_a_split")]
+# 
+# sum(is.na(df$in.bathroom_spot_vent_hour))
+# unique(df$in.bathroom_spot_vent_hour)
+# View(df)
+# 
+# sum(is.na(df$in.bedrooms))
+# unique(df$in.bedrooms)
+# 
+# sum(is.na(df$in.building_america_climate_zone))
+# unique((df$in.building_america_climate_zone))
+# 
+# sum(is.na(df$in.cec_climate_zone))
+# unique(df$in.cec_climate_zone)
+# # remove column - the only value is "None"
+# df <- df[, -which(names(df) == "in.cec_climate_zone")]
+# 
+# sum(is.na(df$in.ceiling_fan))
+# unique(df$in.ceiling_fan) # "Standard Efficiency", "None", "Standard Efficiency, No usage"
+# data_dictionary[8,]
+# # Presence and energy usage of ceiling fans at medium speed
+# 
+# sum(is.na(df$in.census_division))
+# unique(df$in.census_division)
+# # remove column - the only value is "South Atlantic"
+# df <- df[, -which(names(df) == "in.census_division")]
+# 
+# sum(is.na(df$in.census_division_recs))
+# unique(df$in.census_division_recs)
+# # remove column - the only value is "South Atlantic"
+# df <- df[, -which(names(df) == "in.census_division_recs")]
+# 
+# sum(is.na(df$in.census_region))
+# unique(df$in.census_region)
+# # remove column - the only value is "South"
+# df <- df[, -which(names(df) == "in.census_region")]
+# 
+# sum(is.na(df$in.city))
+# unique(df$in.city)
+# 
+# sum(is.na(df$in.clothes_dryer))
+# unique(df$in.clothes_dryer)
+# 
+# sum(is.na(df$in.clothes_washer))
+# unique(df$in.clothes_washer) #[1] "Standard, 100% Usage"   "EnergyStar, 100% Usage" "Standard, 80% Usage" and More
+#  
+# sum(is.na(df$in.clothes_washer_presence))
+# unique(df$in.clothes_washer_presence) #[1] "Yes"  "None"
+#  
+# sum(is.na(df$in.cooking_range))
+# unique(df$in.cooking_range) #[1] "Electric, 100% Usage" "Gas, 80% Usage"       "Electric, 80% Usage"
+#  
+# sum(is.na(df$in.cooling_setpoint))
+# unique(df$in.cooling_setpoint) #[1] 72 76 70 60 78
+# 
+# sum(is.na(df$in.cooling_setpoint_has_offset))
+# unique(df$in.cooling_setpoint_has_offset) #[1] "No"  "Yes"
+#  
+# sum(is.na(df$in.cooling_setpoint_offset_magnitude))
+# unique(df$in.cooling_setpoint_offset_magnitude) #[1] "0F" "2F" "5F" "9F"
+#  
+# sum(is.na(df$in.cooling_setpoint_offset_period))
+# unique(df$in.cooling_setpoint_offset_period) #More data
+#  
+# sum(is.na(df$in.corridor))
+# unique(df$in.corridor) #[1] "Not Applicable" - so remove
+# df <- df[, -which(names(df) == "in.corridor")]
+# 
+# sum(is.na(df$in.county))
+# unique(df$in.county) #[1] "G4500910" "G4500730" "G4500710" "G4500790" "G4500450" and more
+#  
+# sum(is.na(df$in.county_and_puma))
+# unique(df$in.county_and_puma) #[1] "G4500910, G45000502" "G4500730, G45000101" "G4500710, G45000400"
+# 
+# sum(is.na(df$in.dehumidifier))
+# unique(df$in.dehumidifier) #[1] "None"
+# df <- df[, -which(names(df) == "in.dehumidifier")]
+#  
+# sum(is.na(df$in.dishwasher))
+# unique(df$in.dishwasher) #[1] "None" "290 Rated kWh, 100% Usage" "318 Rated kWh, 80% Usage" and more
+#  
+# sum(is.na(df$in.door_area))
+# unique(df$in.door_area) #[1] "20 ft^2"
+# df <- df[, -which(names(df) == "in.door_area")]
+# 
+# sum(is.na(df$in.doors))
+# unique(df$in.doors) #[1] "Fiberglass"
+# df <- df[, -which(names(df) == "in.doors")]
+# 
+# sum(is.na(df$in.ducts))
+# unique(df$in.ducts) #[1] "10% Leakage, R-4", "30% Leakage, R-4", "20% Leakage, R-8" and more
+#  
+# sum(is.na(df$in.eaves))
+# unique(df$in.eaves) #[1] "2 ft"
+# df <- df[, -which(names(df) == "in.eaves")]
+#  
+# sum(is.na(df$in.electric_vehicle))
+# unique(df$in.electric_vehicle) #[1] "None"
+# df <- df[, -which(names(df) == "in.electric_vehicle")]
+# 
+# sum(is.na(df$in.emissions_electricity_folders))
+# unique(df$in.emissions_electricity_folders) #[1] "data/cambium/LRMER_MidCase_15_2025start,data/cambium/LRMER_LowRECost_15_2025start,data/cambium/LRMER_95DecarbBy2035_15_2025start,data/cambium/LRMER_LowRECost_25_2025start"
+#  
+# sum(is.na(df$in.emissions_electricity_units))
+# unique(df$in.emissions_electricity_units) #[1] "kg/MWh,kg/MWh,kg/MWh,kg/MWh"
+# # remove column - the only value is "kg/MWh,kg/MWh,kg/MWh,kg/MWh"
+# df <- df[, -which(names(df) == "in.emissions_electricity_units")]
+# 
+# View(df1)
+```
+
+
+```{r}
+columns_with_na <- c()
+
+columns_with_same_value <- c()
+
+# Loop through each column
+for (col in names(df1)) {
+  
+  if (any(is.na(df1[[col]]))) {
+    columns_with_na <- c(columns_with_na, col)
+    next  # Skip to next iteration if NA values are found
+  }
+  
+  # Check if the column data type is character
+  if (is.character(df1[[col]])) {
+    # Check if unique values are more than one
+    if (length(unique(df1[[col]])) > 1) {
+      # Convert column to factor
+      df1[[col]] <- as.factor(df1[[col]])
+    } else {
+      # Remove the column
+      columns_with_same_value <- c(columns_with_same_value, col)
+    }
+  }
+}
+
+#str(df1)
+
+#columns_with_na # all the columns woth NA Values
+#columns_with_same_value # all the columns that have only one value
+```
+
+
+```{r}
+# Feature engineering
+
+# Loop through each column
+
+for (col in names(df1)) {
+  
+  if (any(is.na(df1[[col]]))) {
+    columns_with_na <- c(columns_with_na, col)
+    next  # Skip to next iteration if NA values are found
+  }
+  
+  # Check if the column data type is character
+  if (is.character(df1[[col]])) {
+    next
+  } 
+  else {
+    # Check if unique values are more than one
+    if (length(unique(df1[[col]])) == 1) {
+      # Convert column to factor
+      columns_with_same_value <- c(columns_with_same_value, col)
+    }
+  }
+}
+
+#str(df1)
+
+#columns_with_na # all the columns with NA Values
+
+#View(df1)
+
+sum(is.na(df1$in.sqft))
+unique(df1$in.sqft)
+# convert the in.sqft column from numeric to categorical
+df1$in.sqft <- as.factor(df1$in.sqft)
+class(df1$in.sqft)
+sum(is.na(df1$in.sqft))
+
+#unique(columns_with_na)
+
+# remove this columns
+# List of column names to remove
+columns_to_remove <- unique(columns_with_na)
+columns_with_same_value <- unique(columns_with_same_value)
+
+# Remove columns
+df1 <- df1[, !names(df1) %in% columns_to_remove]
+df1 <- df1[, !names(df1) %in% columns_with_same_value]
+
+
+# Remove the following columns as they aren't important
+df1 <- df1[, !(names(df1) %in% c("BuildingIdLink", "in.geometry_attic_type", "in.tenure", "WeatherLink", "in.reeds_balancing_area"))]
+
+unique(df1$in.cooling_setpoint_offset_period)
+
+# Use table() function to count the occurrences of each level
+level_counts <- table(df1$in.cooling_setpoint_offset_period)
+
+# Print the counts for each level
+print(level_counts)
+
+sum(is.na(df1))
+
+# View(df1)
+
+# str(df1)
+
+# convert certain numeric columns to factors
+columns_convert_to_factors <- c("bldg_id", "in.bedrooms", "in.cooling_setpoint", "in.geometry_stories", "in.geometry_stories_low_rise", "in.heating_setpoint")
+
+df1[columns_convert_to_factors] <- lapply(df1[columns_convert_to_factors], as.factor)
+
+unique(df1$in.building_america_climate_zone)
+
+# Use table() function to count the occurrences of each level
+level_counts <- table(df1$in.building_america_climate_zone)
+
+# Print the counts for each level
+print(level_counts)
+
+unique(df1$in.building_america_climate_zone)
+
+# Use table() function to count the occurrences of each level
+level_counts <- table(df1$in.building_america_climate_zone)
+
+# Print the counts for each level
+print(level_counts)
+
+# Lets check the temperature difference between Hot-Humid and Mixed_Humid Weather
+
+# Dry Bulb Temperature refers basically to the ambient air temperature
+df_raw <- df1[,c("in.building_america_climate_zone", "Dry Bulb Temperature [°C]")]
+#View(df_raw)
+
+means <- aggregate(`Dry Bulb Temperature [°C]` ~ in.building_america_climate_zone, data = df_raw, FUN = mean)
+
+# Print the mean temperatures for each category
+print(means)
+
+# Hot-Humid	   27.24295			
+# Mixed-Humid	 26.14818	
+
+# We see that the mean temperature in Hot-Humid climate is about 1.1 [°C] more than Mixed-Humid.
+
+means <- aggregate(out.electricity.ceiling_fan.energy_consumption ~ in.building_america_climate_zone, data = df1, FUN = mean)
+print(means)
+
+# Hot-Humid	0.005687754			
+# Mixed-Humid	0.005735088	
+
+means <- aggregate(out.electricity.freezer.energy_consumption ~ in.building_america_climate_zone, data = df1, FUN = mean)
+print(means)
+
+# Hot-Humid	  0.01535117			
+# Mixed-Humid	0.01574630
+
+# As we see with this means that the energy consumption of Mixed_Humid Climate is more than the Hot-Humid Climate, so we can't rely much on the climate zone. Hence, let's remove this column
+
+df1 <- df1[, !names(df1) %in% "in.building_america_climate_zone"]
+
+# let's compare income level and energy consumption
+
+means <- aggregate(out.electricity.cooling.energy_consumption ~ in.income, data = df1, FUN = mean)
+print(means)
+
+# <10000	        0.4555329			
+# 10000-14999	    0.4380610			
+# 100000-119999	  0.5671192			
+# 120000-139999	  0.5946780			
+# 140000-159999	  0.6401886			
+# 15000-19999	    0.4601280			
+# 160000-179999	  0.6877419			
+# 180000-199999	  0.6397727			
+# 20000-24999	    0.4675968			
+# 200000+	        0.6586046
+
+# let's compare sq ft and energy consumption
+
+means <- aggregate(out.electricity.cooling.energy_consumption ~ in.sqft, data = df1, FUN = mean)
+print(means)
+
+# sqft    consumption
+# 328	    0.2208742			
+# 633	    0.2860086			
+# 885	    0.3332651			
+# 1220	  0.4098177			
+# 1690	  0.4857460			
+# 2176	  0.5563104			
+# 2663	  0.6101999			
+# 3301	  0.6918425			
+# 8194	  1.1763323	
+
+# we see a very important aspect that the size of house matter a lot when it comes to energy consumption
+
+unique(df1$in.city) # City for simulation
+
+unique(df1$in.weather_file_city) # City of weather file
+
+# Select columns 88 to 110 and calculate their sum row-wise
+df1$energy_consumption_sum <- rowSums(df1[, 88:110], na.rm = TRUE)
+
+df1$natural_gas_sum <- rowSums(df1[, 111:115], na.rm = TRUE)
+
+df1 <- df1[, !names(df1) %in% "energy_sum"]
+
+# Remove columns 88 to 115
+df1 <- df1[, -c(88:115)]
+
+summary(df1$natural_gas_sum)
+
+ #   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+ # 0.0000  0.0000  0.0000  0.0216  0.0000  3.7416
+
+# lets check relationship between in sqft and energy_consumption_sum
+means <- aggregate(energy_consumption_sum ~ in.sqft, data = df1, FUN = mean)
+print(means)
+# it has a linear relationship
+  
+means <- aggregate(energy_consumption_sum ~ in.bedrooms, data = df1, FUN = mean)
+print(means)
+# it has a linear relationship
+
+# 1 to 86 - check relationship
+
+range(df1$energy_consumption_sum)
+
+range(df1$natural_gas_sum)
+
+means <- aggregate(energy_consumption_sum ~ in.heating_fuel, data = df1, FUN = mean)
+print(means)
+
+# in.heating_fuel energy_consumption_sum
+# 
+# Electricity	        1.234864			
+# Fuel Oil	          1.089042			
+# Natural Gas       	1.221111			
+# None	              1.574700			
+# Other Fuel        	1.177220			
+# Propane	            1.184147
+
+# least energy consumption in Fuel Oil
+
+means <- aggregate(energy_consumption_sum ~ in.income, data = df1, FUN = mean)
+print(means)
+
+#str(df1)
+
+df1$hour <- format(df1$time, format = "%H")
+
+# let's compare hour and energy consumption
+
+means <- aggregate(energy_consumption_sum ~ hour, data = df1, FUN = mean)
+print(means)
+
+# max energy consumption is in hour 16 with mean energy usage of 1.8279792 kWh
+
+class(df1$hour) # it is character
+
+# lets convert hour variable to a factor
+
+sum(is.na(df1$hour))
+unique(df1$hour)
+df1$hour <- as.factor(df1$hour)
+df1$hour
+sum(is.na(df1$hour))
+
+# creating a new data frame of only hour 16
+
+# Filter the dataframe
+df_16 <- subset(df1, hour == "16")
+
+#View(df_16)
+
+# remove columns that are unncessary
+
+#bldg_id, in.city, in.county, in.county_and_puma, in.puma
+
+df_16 <- subset(df_16, select = -c(bldg_id, in.city, in.county, in.county_and_puma, in.puma, time, hour, in.weather_file_latitude, in.weather_file_longitude))
+
+View(df_16)
+
+# Write the data frame to a CSV file
+write.csv(df_16, file = "df2.csv", row.names = FALSE)
+
+# str(df_16)
+# 
+# levels(df_16$in.pv_system_size)
+# 
+# df_16 <- subset(df_16, in.pv_orientation == "None")
+# 
+# df_16 <- subset(df_16, in.pv_system_size == "None")
+# 
+# # df_16 <- subset(df_16, select = -c(in.pv_orientation, in.pv_system_size))
+# 
+# range(df_16$energy_consumption_sum)
+# 
+# range(df_16$natural_gas_sum)
+
+# house data cleaning
+
+temp_house <- housedata
+
+cols <- c("bldg_id",
+"in.sqft",
+"in.bathroom_spot_vent_hour",
+"in.bedrooms",
+"in.city",
+"in.cooking_range",
+"in.clothes_dryer",
+"in.clothes_washer",
+"in.cooling_setpoint",
+"in.county",
+"in.dishwasher",
+"in.federal_poverty_level",
+"in.geometry_foundation_type",
+"in.geometry_garage", 
+"in.geometry_stories",
+"in.geometry_wall_exterior_finish", 
+"in.geometry_wall_type",
+"in.has_pv", 
+"in.heating_fuel", 
+"in.heating_setpoint", 
+"in.holiday_lighting", 
+"in.hot_water_distribution", 
+"in.hot_water_fixtures", 
+"in.hvac_cooling_efficiency", 
+"in.hvac_cooling_type",
+"in.hvac_has_ducts", 
+"in.hvac_has_shared_system",
+"in.hvac_heating_efficiency",
+"in.hvac_heating_type",
+"in.hvac_heating_type_and_fuel",
+"in.income",
+"in.income_recs_2015",
+"in.income_recs_2020",
+"in.infiltration",
+"in.insulation_ceiling",
+"in.insulation_floor",
+"in.insulation_wall",
+"in.orientation",
+"in.puma",
+"in.occupants",
+"in.plug_load_diversity",
+"in.range_spot_vent_hour",
+"in.refrigerator",
+"in.roof_material",
+"in.usage_level",
+"in.vacancy_status",
+"in.water_heater_efficiency",
+"in.water_heater_fuel",
+"in.weather_file_latitude",
+"in.weather_file_longitude",
+"upgrade.clothes_dryer")
+
+temp_house <- temp_house[,cols]   # housedata cleaning, left 51 columns in total
+
+
+```
+
+
+```{r}
+```
+
+
+```{r}
+# Modeling
+
+library(readr)
+data <- read_csv("Documents/SP/SMIT PARIKH/MS APPLIED DATA SCIENCE/SEMESTER 1/IST 687 - Introduction to Data Science/Project/main/Data.csv")
+View(data)
+
+# Identify the first 79 columns
+cols_to_convert <- 1:79
+
+# Convert the identified columns to factors
+data[cols_to_convert] <- lapply(data[cols_to_convert], as.factor)
+
+levels(data$in.weather_file_city)
+
+lmOutFinal <- lm(energy_sum ~ in.sqft + in.cooling_setpoint + in.cooling_setpoint_offset_period
+                 + in.window_areas + `Dry Bulb Temperature [°C]`  + in.ducts
+                 + in.occupants  + in.heating_setpoint + in.windows 
+                 + in.orientation + in.geometry_garage 
+                 + in.heating_setpoint_offset_period + in.weather_file_city, data) 
+
+summary(lmOutFinal)
+
+library(caret)
+
+# Create indices for splitting data into training (80%) and testing (20%)
+train_index <- createDataPartition(data$energy_sum, p = 0.8, list = FALSE)
+
+# Split data into training and testing sets
+train_data <- data[train_index, ]
+test_data <- data[-train_index, ]
+
+lmTrain <- lm(energy_sum ~ in.sqft + in.cooling_setpoint + in.cooling_setpoint_offset_period
+                 + in.window_areas + `Dry Bulb Temperature [°C]`  + in.ducts
+                 + in.occupants  + in.heating_setpoint + in.windows 
+                 + in.orientation + in.geometry_garage + in.heating_setpoint_offset_period + in.weather_file_city, 
+              train_data) 
+
+summary(lmTrain)
+
+predictions <- predict(lmTrain, newdata = test_data)
+
+rmse <- sqrt(mean((test_data$energy_sum - predictions)^2))
+rmse # 0.3849385
+
+rsquared <- cor(predictions, test_data$energy_sum)^2
+rsquared # 0.7096055
+
+################################################################
+
+#SVM
+
+library(e1071)
+
+svm_model <- svm(energy_sum ~ in.sqft + in.cooling_setpoint + in.cooling_setpoint_offset_period
+                 + in.window_areas + `Dry Bulb Temperature [°C]`  + in.ducts
+                 + in.occupants  + in.heating_setpoint + in.windows 
+                 + in.orientation + in.geometry_garage + in.heating_setpoint_offset_period  
+                 + in.weather_file_city, data = train_data, 
+                 kernel = "linear", cost = 10, gamma = 0.5)
+
+predictions <- predict(svm_model, newdata = test_data)
+
+# Calculate R-squared
+rsquared <- cor(predictions, test_data$energy_sum)^2
+
+# Calculate RMSE
+rmse <- sqrt(mean((predictions - test_data$energy_sum)^2))
+
+# Print R-squared and RMSE
+print(paste("R-squared:", rsquared))
+print(paste("RMSE:", rmse))
+
+#####################################################################
+
+# Load the required library
+library(rpart)
+
+# Build the decision tree model
+tree_model <- rpart(energy_sum ~ in.sqft + in.cooling_setpoint + in.cooling_setpoint_offset_period
+                    + in.window_areas + `Dry Bulb Temperature [°C]`  + in.ducts
+                    + in.occupants  + in.heating_setpoint + in.windows 
+                    + in.orientation + in.geometry_garage + in.heating_setpoint_offset_period
+                    + in.weather_file_city,
+                    data = train_data, method = "anova")
+
+
+# Visualize the decision tree (optional)
+plot(tree_model)
+text(tree_model)
+
+# Make predictions on the test data
+predictions <- predict(tree_model, newdata = test_data)
+
+# Calculate RMSE (Root Mean Squared Error) as evaluation metric
+rmse <- sqrt(mean((predictions - test_data$energy_sum)^2))
+print(paste("RMSE:", rmse))
+
+library(rpart)
+library(caret)
+
+# Define training control with 10-fold cross-validation
+train_control <- trainControl(method = "cv", number = 10)
+
+
+# Tune the 'cp' parameter using cross-validation
+cp_grid <- expand.grid(cp = seq(0.01, 0.1, by = 0.01))  # Specify range of 'cp' values to try
+
+tree_model <- train(energy_sum ~ in.sqft + in.cooling_setpoint + in.cooling_setpoint_offset_period
+                    + in.window_areas + `Dry Bulb Temperature [°C]`  + in.ducts
+                    + in.occupants  + in.heating_setpoint + in.windows 
+                    + in.orientation + in.geometry_garage + in.heating_setpoint_offset_period,
+                    data = train_data, 
+                    data, method = "rpart", 
+                    trControl = train_control, tuneGrid = cp_grid)
+
+# Get the best model
+best_tree_model <- tree_model$finalModel
+
+# Visualize the decision tree (optional)
+plot(best_tree_model)
+text(best_tree_model)
+
+# Make predictions on the test data
+predictions <- predict(best_tree_model, newdata = test_data)
+
+# Calculate RMSE (Root Mean Squared Error) as evaluation metric
+rmse <- sqrt(mean((predictions - test_data$Sepal.Length)^2))
+print(paste("RMSE:", rmse))
+
+############################################################
+
+install.packages("gbm")
+library(gbm)
+gbm_model <- gbm(energy_sum ~ in.sqft + in.cooling_setpoint + in.cooling_setpoint_offset_period
+                 + in.window_areas + `Dry Bulb Temperature [°C]`  + in.ducts
+                 + in.occupants  + in.heating_setpoint + in.windows 
+                 + in.orientation + in.geometry_garage + in.heating_setpoint_offset_period,
+                 data = train_data, distribution = "gaussian", n.trees = 1000)
+
+# Predictions on training data
+predictions <- predict(gbm_model, newdata = test_data, n.trees = 1000)
+
+# Calculate MSE and RMSE
+mse <- mean((predictions - test_data$energy_sum)^2)
+rmse <- sqrt(mse)
+
+# Calculate R-squared
+r_squared <- cor(predictions, test_data$energy_sum)^2
+
+# Print evaluation metrics
+print(paste("MSE:", mse))
+print(paste("RMSE:", rmse))
+print(paste("R-squared:", r_squared))
+
+
+#############################################################
+
+#install.packages("glmnet")
+library(glmnet)
+
+# Assuming your predictors are stored in 'X' and the response variable is 'y'
+lasso_model <- glmnet(x = as.matrix(train_data[, c("in.sqft", "in.cooling_setpoint", "in.cooling_setpoint_offset_period",
+                                                   "in.window_areas", "Dry Bulb Temperature [°C]", "in.ducts",
+                                                   "in.occupants", "in.heating_setpoint", "in.windows", 
+                                                   "in.orientation", "in.geometry_garage", 
+                                                   "in.heating_setpoint_offset_period")]), 
+                      y = train_data$energy_sum, alpha = 1)
+
+cv_model <- cv.glmnet(x = as.matrix(train_data[, c("in.sqft", "in.cooling_setpoint", "in.cooling_setpoint_offset_period",
+                                                   "in.window_areas", "Dry Bulb Temperature [°C]", "in.ducts",
+                                                   "in.occupants", "in.heating_setpoint", "in.windows", 
+                                                   "in.orientation", "in.geometry_garage", 
+                                                   "in.heating_setpoint_offset_period")]), 
+                      y = train_data$energy_sum, alpha = 1)
+
+# Assuming 'new_data' is the new dataset for prediction
+predictions <- predict(lasso_model, newx = as.matrix(test_data))
+
+
+library(readr)
+data <- read_csv("Data.csv")
+View(data)
+
+# Identify the first 79 columns
+cols_to_convert <- 1:79
+
+# Convert the identified columns to factors
+data[cols_to_convert] <- lapply(data[cols_to_convert], as.factor)
+
+#levels(data$in.weather_file_city)
+
+lmOutFinal <- lm(energy_sum ~ in.sqft + in.cooling_setpoint + in.cooling_setpoint_offset_period
+                 + in.window_areas + `Dry Bulb Temperature [°C]`  + in.ducts
+                 + in.occupants  + in.heating_setpoint + in.windows 
+                 + in.orientation + in.geometry_garage 
+                 + in.heating_setpoint_offset_period + in.weather_file_city, data) 
+
+summary(lmOutFinal)
+
+library(caret)
+
+# Create indices for splitting data into training (80%) and testing (20%)
+train_index <- createDataPartition(data$energy_sum, p = 0.8, list = FALSE)
+
+# Split data into training and testing sets
+train_data <- data[train_index, ]
+test_data <- data[-train_index, ]
+
+lmTrain <- lm(energy_sum ~ in.sqft + in.cooling_setpoint + in.cooling_setpoint_offset_period
+              + in.window_areas + `Dry Bulb Temperature [°C]`  + in.ducts
+              + in.occupants  + in.heating_setpoint + in.windows 
+              + in.orientation + in.geometry_garage + in.heating_setpoint_offset_period + in.weather_file_city, 
+              train_data) 
+
+summary(lmTrain)
+
+predictions <- predict(lmTrain, newdata = test_data)
+
+rmse <- sqrt(mean((test_data$energy_sum - predictions)^2))
+rmse # 0.3849385
+
+rsquared <- cor(predictions, test_data$energy_sum)^2
+rsquared # 0.7096055
+
+#########################################################
+
+# create a new data set by adding 5 degrees to Dry Bulb Temperature [°C] column
+data_new <- data
+data_new$`Dry Bulb Temperature [°C]` <- data_new$`Dry Bulb Temperature [°C]` + 5
+
+predictions <- predict(lmTrain, newdata = data_new)
+
+rmse <- sqrt(mean((data_new$energy_sum - predictions)^2))
+rmse # 0.6864048
+
+rsquared <- cor(predictions, data_new$energy_sum)^2
+rsquared # 0.7323269
+
+#########################################################
+
+in.sqft + in.cooling_setpoint + in.cooling_setpoint_offset_period
++ in.window_areas + `Dry Bulb Temperature [°C]`  + in.ducts
++ in.occupants  + in.heating_setpoint + in.windows 
++ in.orientation + in.geometry_garage + in.heating_setpoint_offset_period + in.weather_file_city
+
+levels(data$in.sqft)
+levels(data$in.cooling_setpoint)
+levels(data$in.cooling_setpoint_offset_period)
+levels(data$in.window_areas)
+unique(data$`Dry Bulb Temperature [°C]`)
+levels(data$in.ducts)
+levels(data$in.occupants)
+levels(data$in.heating_setpoint)
+levels(data$in.windows)
+levels(data$in.orientation)
+levels(data$in.geometry_garage)
+levels(data$in.heating_setpoint_offset_period)
+levels(data$in.weather_file_city)
+
+#########################################################
+
+# Prediction
+
+# Create the vector
+test_vector <- c("885", "60", "Day and Night Setup -2h", "F12 B12 L12 R12", 27, "10% Leakage, R-4",
+                 "9", "72", "Double, Clear, Metal, Air", "East", "3 Car", "Day -1h", "Charleston Muni")
+
+# Assign column names
+column_names <- c("in.sqft", "in.cooling_setpoint", "in.cooling_setpoint_offset_period",
+                  "in.window_areas", "Dry Bulb Temperature [°C]", "in.ducts",
+                  "in.occupants", "in.heating_setpoint", "in.windows",
+                  "in.orientation", "in.geometry_garage", "in.heating_setpoint_offset_period",
+                  "in.weather_file_city")
+
+# Create the data frame
+testDF <- data.frame(matrix(test_vector, nrow = 1, byrow = TRUE))
+
+# Assign column names to the data frame
+colnames(testDF) <- column_names
+
+# Display the data frame
+View(testDF)
+
+testDF$`Dry Bulb Temperature [°C]` <- as.numeric(testDF$`Dry Bulb Temperature [°C]`)
+
+class(testDF$`Dry Bulb Temperature [°C]`)
+
+prediction <- predict(lmOutFinal, testDF)
+
+prediction
+
+# further data filtering for linear modeling
+# variable cannot only have single type
+# remove those variables
+
+# Merging house data, weather data and energy data together
+
+RawData <- merge(temp_house,outputList,all.x=TRUE,by="bldg_id") 
+
+# column 1-51 is house applications and geometries, 52 is total energy consumption in july, 54-56 is average weather info
+
+newData <- RawData
+
+cols <- c(
+"in.sqft",
+"in.bathroom_spot_vent_hour",
+"in.city",
+"in.cooking_range",
+"in.clothes_dryer",
+"in.clothes_washer",
+"in.cooling_setpoint",
+"in.county",
+"in.dishwasher",
+"in.federal_poverty_level",
+"in.geometry_foundation_type",
+"in.geometry_garage", 
+"in.geometry_stories",
+"in.geometry_wall_exterior_finish", 
+"in.geometry_wall_type",
+"in.heating_fuel", 
+"in.heating_setpoint", 
+"in.hot_water_fixtures", 
+"in.hvac_cooling_efficiency", 
+"in.hvac_cooling_type",
+"in.hvac_has_ducts", 
+"in.hvac_heating_efficiency",
+"in.hvac_heating_type",
+"in.hvac_heating_type_and_fuel",
+"in.income",
+"in.income_recs_2015",
+"in.income_recs_2020",
+"in.infiltration",
+"in.insulation_ceiling",
+"in.insulation_floor",
+"in.insulation_wall",
+"in.orientation",
+"in.puma",
+"in.occupants",
+"in.plug_load_diversity",
+"in.range_spot_vent_hour",
+"in.refrigerator",
+"in.roof_material",
+"in.usage_level",
+"in.vacancy_status",
+"in.water_heater_efficiency",
+"in.water_heater_fuel",
+"in.weather_file_latitude",
+"in.weather_file_longitude",
+"upgrade.clothes_dryer",
+"energy_consumption",
+"mean_temperature",
+"mean_humidity",
+"mean_wind_speed")
+
+newData <- newData[,cols]   # housedata cleaning, left 49 columns in total
+#str(newData)
+
+# Store RawData as an excel file
+#install.packages("writexl")
+library(writexl)
+#RawData <- rawdata
+df <- RawData
+write_xlsx(df, "~/Downloads/RawData.csv")
+
+# the path can be anywhere, seperate path with **\\**
+
+# Store RawData as an excel file
+#install.packages("writexl")
+library(writexl)
+#RawData <- rawdata
+df <- RawData
+write_xlsx(df, "~/Downloads/rawdata.csv")
+
+# the path can be anywhere, seperate path with **\\**
+```
+
+
+```{r}
+```
+
